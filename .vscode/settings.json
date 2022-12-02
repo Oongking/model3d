@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./script/OpenCV/ArUCoStudy/ArUCo-Markers-Pose-Estimation-Generation-Python-main"
+    ]
+}
