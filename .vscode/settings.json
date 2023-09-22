@@ -1,5 +1,11 @@
 {
     "python.analysis.extraPaths": [
         "./script/OpenCV/ArUCoStudy/ArUCo-Markers-Pose-Estimation-Generation-Python-main"
+    ],
+    "python.autoComplete.extraPaths": [
+        "/home/oongking/Camera_ws/devel/lib/python3/dist-packages",
+        "/home/oongking/ur5_ws/devel/lib/python3/dist-packages",
+        "/home/oongking/RobotArm_ws/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages"
     ]
 }

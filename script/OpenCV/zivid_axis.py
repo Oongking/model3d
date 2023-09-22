@@ -37,6 +37,10 @@ convert_rgbFloat_to_tuple = lambda rgb_float: convert_rgbUint32_to_tuple(
 
 matrix_coefficients = [[ 1782.476318359375, 0.0, 965.43896484375], [ 0.0, 1784.1812744140625, 590.5164184570312], [ 0, 0, 1]]
 distortion_coefficients = [[-0.08575305342674255, 0.1142171174287796, 0.00030625637737102807, -0.0007428471581079066, -0.048006460070610046]]
+
+# matrix_coefficients = [[1775.45651052, 0.0, 971.44183783],[0.0, 1776.00990344, 593.88802681],[ 0.0, 0.0, 1.0 ]]
+# distortion_coefficients = [[-0.08439001,  0.05578754,  0.00092648,  0.00037382,  0.11682607]]
+
 aruco_dict_type = cv2.aruco.DICT_5X5_50
 
 matrix_coefficients = np.array(matrix_coefficients)

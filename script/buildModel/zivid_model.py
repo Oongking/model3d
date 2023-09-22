@@ -29,7 +29,7 @@ import numpy as np
 import time
 import copy
 
-show_display = 0
+show_display = 1
 
 # The data structure of each point in ros PointCloud2: 16 bits = x + y + z + rgb
 FIELDS_XYZ = [
@@ -50,8 +50,12 @@ convert_rgbFloat_to_tuple = lambda rgb_float: convert_rgbUint32_to_tuple(
     int(cast(pointer(c_float(rgb_float)), POINTER(c_uint32)).contents.value)
 )
 
-matrix_coefficients = [[ 1782.476318359375, 0.0, 965.43896484375], [ 0.0, 1784.1812744140625, 590.5164184570312], [ 0, 0, 1]]
-distortion_coefficients = [[-0.08575305342674255, 0.1142171174287796, 0.00030625637737102807, -0.0007428471581079066, -0.048006460070610046]]
+# matrix_coefficients = [[ 1782.476318359375, 0.0, 965.43896484375], [ 0.0, 1784.1812744140625, 590.5164184570312], [ 0, 0, 1]]
+# distortion_coefficients = [[-0.08575305342674255, 0.1142171174287796, 0.00030625637737102807, -0.0007428471581079066, -0.048006460070610046]]
+
+matrix_coefficients = [[1775.45651052, 0.0, 971.44183783],[0.0, 1776.00990344, 593.88802681],[ 0.0, 0.0, 1.0 ]]
+distortion_coefficients = [[-0.08439001,  0.05578754,  0.00092648,  0.00037382,  0.11682607]]
+
 matrix_coefficients = np.array(matrix_coefficients)
 distortion_coefficients = np.array(distortion_coefficients)
 
@@ -249,6 +253,15 @@ def create_board(markerSize,dict):
 
     return board
 
+def resize(img,scale_percent):
+    # scale_percent = 50 # percent of original size
+    width = int(img.shape[1] * scale_percent / 100)
+    height = int(img.shape[0] * scale_percent / 100)
+    dim = (width, height)
+    
+        # resize image
+    resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
+    return resized
 
 Realcoor = o3d.geometry.TriangleMesh.create_coordinate_frame(0.01,[0,0,0])
 
@@ -262,14 +275,18 @@ if __name__ == '__main__':
     pcd_merged = o3d.geometry.PointCloud()
 
     board75 = cv2.aruco.GridBoard_create(7, 5, 0.0315, 0.0081, arucoDict)
-    boardA3 = cv2.aruco.GridBoard_create(14, 10, 0.02155, 0.0058, arucoDictA3)
+    # boardA3 = cv2.aruco.GridBoard_create(14, 10, 0.02155, 0.0058, arucoDictA3)
+    boardA3 = cv2.aruco.GridBoard_create(14, 10, 0.0216, 0.0058, arucoDictA3)
 
     #A4
     # offset_x=0.5*((0.0315*7)+(0.0081*(7-1)))
     # offset_y=0.5*((0.0315*5)+(0.0081*(5-1)))
     #A3
-    offset_x=0.5*((0.02155*14)+(0.0058*(14-1)))
-    offset_y=0.5*((0.02155*10)+(0.0058*(10-1)))
+    # offset_x=0.5*((0.02155*14)+(0.0058*(14-1)))
+    # offset_y=0.5*((0.02155*10)+(0.0058*(10-1)))
+    #zivid chessboard
+    offset_x=0.5*((0.0216*14)+(0.0058*(14-1)))+0.0025
+    offset_y=0.5*((0.0216*10)+(0.0058*(10-1)))
 
     while True:
         print("=================================================================================")
@@ -290,8 +307,12 @@ if __name__ == '__main__':
                 if show_display:
                     if rvec is not None and tvec is not None:
                         cv2.aruco.drawAxis( rgb_image, matrix_coefficients, distortion_coefficients, rvec, tvec, 0.08 )
-                        cv2.imshow('rgb_image', rgb_image)
-            
+                        while True:
+                            cv2.imshow('rgb_image', resize(rgb_image,50))
+                            if cv2.waitKey(1) & 0xFF==ord('q'):
+                                cv2.destroyAllWindows()
+                                break
+                        
             transformation_matrix = np.array([  [1, 0, 0, 0],
                                                 [0, 1, 0, 0],
                                                 [0, 0, 1, 0],
@@ -315,9 +336,11 @@ if __name__ == '__main__':
             centercoor = o3d.geometry.TriangleMesh.create_coordinate_frame(0.01,[0,0,0])
             centercoor.rotate(transformation_matrix[:3, :3],(0,0,0))
             centercoor.translate(np.asarray(transformation_matrix[:3,3],dtype=np.float64),relative=False)
+            mesh_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.001)
+            mesh_sphere.translate(np.asarray(transformation_matrix[:3,3],dtype=np.float64),relative=False)
 
             if show_display:
-                o3d.visualization.draw_geometries([Realcoor,centercoor,pcd,box])
+                o3d.visualization.draw_geometries([Realcoor,centercoor,mesh_sphere,pcd,box])
 
             pcd_crop = pcd.crop(box)
             if not pcd_crop.is_empty():
@@ -345,7 +368,7 @@ if __name__ == '__main__':
             o3d.visualization.draw_geometries([small_Realcoor,pcd_merged])
 
         elif key == 's':
-            o3d.io.write_point_cloud(f"/home/oongking/RobotArm_ws/src/model3d/script/buildModel/Data/Model.pcd", pcd_merged)
+            o3d.io.write_point_cloud(f"/home/oongking/RobotArm_ws/src/model3d/script/buildModel/Data/eraser/Model.pcd", pcd_merged)
 
             # Raw Data
             # o3d.io.write_point_cloud(f"/home/oongking/RobotArm_ws/src/model3d/script/buildModel/Data/Model.pcd", pcd)

@@ -55,6 +55,20 @@ distortion_coefficients = [[-0.08575305342674255, 0.1142171174287796, 0.00030625
 matrix_coefficients = np.array(matrix_coefficients)
 distortion_coefficients = np.array(distortion_coefficients)
 
+zivid_matrix_coefficients = np.array([[1775.45651052, 0.0, 971.44183783],
+                                [0.0, 1776.00990344, 593.88802681],
+                                [ 0.0, 0.0, 1.0 ]])
+zivid_distortion_coefficients = np.array([[-0.08439001,  0.05578754,  0.00092648,  0.00037382,  0.11682607]])
+# zivid_intrinsic = o3d.camera.PinholeCameraIntrinsic(1944, 1200, 1775.45651052, 1776.00990344, 971.44183783, 593.88802681)
+# K: [1782.476318359375, 0.0, 965.43896484375, 0.0, 1784.1812744140625, 590.5164184570312, 0.0, 0.0, 1.0]
+
+zivid_intrinsic = o3d.camera.PinholeCameraIntrinsic(1944, 1200, 1782.476318359375, 1784.1812744140625, 965.43896484375, 590.5164184570312)
+
+def UndistortedImage(image):
+
+    image_dist = cv2.undistort(image, matrix_coefficients, distortion_coefficients, None, matrix_coefficients)
+    return image_dist
+
 bridge=CvBridge()
 
 class sphere:
@@ -74,9 +88,11 @@ class zivid_cam:
 
         rospy.Subscriber("/zivid_camera/points/xyzrgba", PointCloud2, self.points_callback)
         rospy.Subscriber("/zivid_camera/color/image_color", Image, self.rgb_callback)
+        rospy.Subscriber("/zivid_camera/depth/image", Image, self.depth_callback)
         self.received_ros_cloud = None
         self.pcd = None
         self.rgb_image = None
+        self.depth_image = None
         self.capture_service = rospy.ServiceProxy("/zivid_camera/capture", Capture)
 
         rospy.loginfo("Enabling the reflection filter")
@@ -113,6 +129,36 @@ class zivid_cam:
         self.rgb_image = None
         self.pcd = None
         return rgb_image, pcd
+    
+    def testMatrix(self):
+        rospy.loginfo("Calling capture service")
+        self.rgb_image = None
+        self.depth_image = None
+        self.pcd = None
+        self.capture_service()
+
+        while 1:
+            # print("wait for input")
+            if (self.rgb_image is not None) and (self.depth_image is not None) and (self.pcd is not None):
+                break
+        
+        un_rgb_image = UndistortedImage(self.rgb_image)
+        un_depth_image = UndistortedImage(self.depth_image)
+        depth = o3d.geometry.Image(un_depth_image)
+        color = o3d.geometry.Image(cv2.cvtColor(un_rgb_image, cv2.COLOR_BGR2RGB))
+        
+        # depth = o3d.geometry.Image(self.depth_image)
+        # color = o3d.geometry.Image(cv2.cvtColor(self.rgb_image, cv2.COLOR_BGR2RGB))
+        rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(color, depth, depth_scale=1.0, depth_trunc=100.0, convert_rgb_to_intensity=False)
+        make_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, zivid_intrinsic)
+
+        pcd = copy.deepcopy(self.pcd)
+        rgb_image = copy.deepcopy(self.rgb_image)
+        depth_image = copy.deepcopy(self.depth_image)
+        self.pcd = None
+        self.rgb_image = None
+        self.depth_image = None
+        return pcd,rgb_image, depth_image,make_pcd
         
 
     def points_callback(self, data):
@@ -126,6 +172,14 @@ class zivid_cam:
             self.rgb_image = bridge.imgmsg_to_cv2(received_image, "bgr8")
         except CvBridgeError as e:
                 print(e)
+    
+    def depth_callback(self,data):
+        try:
+            T_depth_image = bridge.imgmsg_to_cv2(data, "32FC1")
+            self.depth_image = T_depth_image.astype(np.float32)
+
+        except CvBridgeError as e:
+            print(e)
 
     def convertCloudFromRosToOpen3d(self):
         print(":: convertCloudFromRosToOpen3d ::")
@@ -162,11 +216,11 @@ class zivid_cam:
                     rgb = [convert_rgbUint32_to_tuple(rgb) for x,y,z,rgb in cloud_data ]
 
                 # combine
-                open3d_cloud.points = o3d.utility.Vector3dVector(np.array(xyz)/1000)
+                open3d_cloud.points = o3d.utility.Vector3dVector(np.array(xyz))
                 open3d_cloud.colors = o3d.utility.Vector3dVector(np.array(rgb)/255.0)
             else:
                 xyz = [(x,y,z) for x,y,z in cloud_data ] # get xyz
-                open3d_cloud.points = o3d.utility.Vector3dVector(np.array(xyz)/1000)
+                open3d_cloud.points = o3d.utility.Vector3dVector(np.array(xyz))
 
             print("Pointclound O3D : ", open3d_cloud)
             # return
@@ -211,7 +265,7 @@ def create_board(markerSize,dict):
 
     return board
 
-Realcoor = o3d.geometry.TriangleMesh.create_coordinate_frame(0.01,[0,0,0])
+Realcoor = o3d.geometry.TriangleMesh.create_coordinate_frame(0.1,[0,0,0])
 
 if __name__ == '__main__':
     cam = zivid_cam()
@@ -237,9 +291,26 @@ if __name__ == '__main__':
         key = getch.getch().lower()
         print("key : ",key)
         if key == 't':
-            rgb_image, pcd = cam.capture()
-            cv2.imshow('rgb_image', rgb_image)
-            o3d.visualization.draw_geometries([Realcoor,pcd])
+            pcd,rgb_image, depth_image,make_pcd = cam.testMatrix()
+
+            
+            # while not rospy.is_shutdown():
+            #     waitkeyboard = cv2.waitKey(1)
+            #     cv2.imshow('rgb_image', rgb_image)
+            #     cv2.imshow('un_rgb_image', un_rgb_image)
+            #     cv2.imshow('depth_image', depth_image)
+            #     cv2.imshow('un_depth_image', un_depth_image)
+
+            #     if waitkeyboard & 0xFF==ord('q'):
+            #         print("===== End =====")
+            #         break
+
+            # make_pcd.translate([1,0,0])
+
+            print(f"make_pcd : {make_pcd}")
+            print(f"pcd : {pcd}")
+            pcd.paint_uniform_color([1, 0.706, 0])
+            o3d.visualization.draw_geometries([Realcoor,pcd,make_pcd])
         if key == 'c':
             print("\n:: Capturing ::")
             rvec=None
